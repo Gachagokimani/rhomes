@@ -1,0 +1,73 @@
+{
+  "name": "rhomes-backend",
+  "version": "1.0.0",
+  "main": "server.js",
+  "packageManager": "pnpm@10.18.3",
+  "type": "module",
+  "scripts": {
+    "start": "nodemon server.js",
+    "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "corepack": "^0.34.0",
+    "concurrently": "^6.0.2",
+    "dotenv": "^16.0.3",
+    "nodemon": "^3.1.10",
+    "jsonwebtoken": "^9.0.0",
+    "bcryptjs": "^2.4.3",
+    "nodemailer": "^6.9.1",
+    "axios": "^1.4.0",
+    "body-parser": "^1.20.2",
+    "express-rate-limit": "^6.7.0",
+    "helmet": "^6.1.0",
+    "compression": "^1.7.4",
+    "winston": "^3.8.2",
+    "winston-daily-rotate-file": "^5.0.0",
+    "morgan": "^1.10.0",
+    "cookie-parser": "^1.4.6",
+    "express-session": "^1.17.3",
+    "connect-mongo": "^4.6.0",
+    "express-validator": "^6.14.0",
+    "multer": "^1.4.5-lts.1",
+    "multer-s3": "^2.10.0",
+    "aws-sdk": "^2.1360.0",
+    "stripe": "^12.0.0",
+    "otp-generator": "^1.0.0",
+    "otp-verifier": "^1.0.0",
+    "passport": "^0.4.1",
+    "passport-jwt": "^4.0.0",
+    "passport-local": "^1.0.0",
+    "express": "^4.18.2",
+    "mongoose": "^8.0.0",
+    "redis": "^4.6.0",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "corepack": "^0.17.3",
+    "nodemon": "^3.1.10",
+    "morgan": "^1.10.0",
+    "eslint": "^9.37.0",
+    "eslint-config-airbnb-base": "^15.0.0",
+    "eslint-plugin-import": "^2.25.3",
+    "eslint-plugin-node": "^11.1.0",
+    "eslint-plugin-promise": "^6.0.0",
+    "eslint-plugin-security": "^1.4.0",
+    "eslint-plugin-jsdoc": "^39.0.0",
+    "eslint-plugin-prettier": "^4.0.0",
+    "eslint-config-prettier": "^8.0.0",
+    "prettier": "^2.5.1",
+    "jest": "^27.0.0",
+    "supertest": "^7.1.4",
+    "eslint-plugin-mocha": "^9.0.0"
+  },
+  "engines": {
+    "node": ">=14.0.0" 
+
+  },
+  "keywords": [
+    "backend",
+    "database",
+    "rhomes",
+    "redis"
+  ]
+}
