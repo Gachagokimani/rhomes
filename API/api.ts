@@ -1,4 +1,4 @@
-// frontend/src/API/api.ts
+// services/apiService.ts
 const API_BASE_URL = 'http://localhost:3000/api';
 
 export type WebhookEvent = 
@@ -34,6 +34,13 @@ interface AuthResponse {
   user?: any;
   token?: string;
   error?: string;
+}
+
+interface OTPResponse {
+  success: boolean;
+  message: string;
+  resendAllowed?: boolean;
+  cooldown?: number;
 }
 
 interface TestConnectionResults {
@@ -115,19 +122,27 @@ class ApiService {
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${this.baseURL}${endpoint}`;
     
+    // Create a clean config object
     const config: RequestInit = {
+      method: options.method,
       headers: {
         ...this.defaultHeaders,
         ...options.headers,
       },
-      ...options,
+      // Don't include body here, we'll handle it separately
     };
 
-    // Handle request body - FIXED: Properly handle body serialization
-    if (options.body && typeof options.body === 'object' && !this.isBodyInit(options.body)) {
-      config.body = JSON.stringify(options.body);
-    } else {
-      config.body = options.body;
+    // Handle request body serialization properly
+    if (options.body) {
+      if (typeof options.body === 'string' || 
+          options.body instanceof FormData || 
+          options.body instanceof URLSearchParams ||
+          options.body instanceof Blob) {
+        config.body = options.body;
+      } else {
+        // For objects, stringify them
+        config.body = JSON.stringify(options.body);
+      }
     }
 
     try {
@@ -143,7 +158,7 @@ class ApiService {
         } catch {
           errorData = { error: errorText || `HTTP error! status: ${response.status}` };
         }
-        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+        throw new Error(errorData.error || errorData.message || `HTTP error! status: ${response.status}`);
       }
       
       const data = await response.json();
@@ -154,20 +169,6 @@ class ApiService {
       console.error(`❌ API Error (${config.method || 'GET'} ${url}):`, error);
       throw error;
     }
-  }
-
-  /**
-   * Check if value is a valid BodyInit type
-   */
-  private isBodyInit(value: any): value is BodyInit {
-    return (
-      typeof value === 'string' ||
-      value instanceof Blob ||
-      value instanceof ArrayBuffer ||
-      value instanceof FormData ||
-      value instanceof URLSearchParams ||
-      (ArrayBuffer.isView(value) && !(value instanceof DataView))
-    );
   }
 
   // =============================================
@@ -227,41 +228,84 @@ class ApiService {
   }
 
   // =============================================
-  // AUTH ENDPOINTS - FIXED: Proper body handling
+  // OTP AUTH ENDPOINTS - FIXED
   // =============================================
 
-  async register(userData: any) {
-    const result = await this.request('/auth/register', {
+  /**
+   * Send OTP to user email for verification
+   */
+  async sendOTP(email: string, purpose: string = 'account_verification'): Promise<OTPResponse> {
+    const result = await this.request<OTPResponse>('/send-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email, purpose }) // ✅ Fixed: Explicit stringify
+    });
+    
+    this.triggerWebhook('otp.requested', { email, purpose });
+    return result;
+  }
+
+  /**
+   * Verify OTP code
+   */
+  async verifyOTP(email: string, otp: string, purpose: string = 'account_verification'): Promise<OTPResponse> {
+    const result = await this.request<OTPResponse>('/verify-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email, otp, purpose }) // ✅ Fixed: Explicit stringify
+    });
+    
+    if (result.success) {
+      this.triggerWebhook('otp.verified', { email, purpose });
+    }
+    
+    return result;
+  }
+
+  /**
+   * Complete user registration after OTP verification
+   */
+  async register(userData: {
+    name: string;
+    email: string;
+    role: string;
+    password: string;
+    bio?: string;
+    phone: string;
+  }): Promise<AuthResponse> {
+    const result = await this.request<AuthResponse>('/register', {
       method: 'POST',
       body: JSON.stringify(userData) // ✅ Fixed: Explicit stringify
     });
     
-    this.triggerWebhook('user.registered', result);
-    return result;
-  }
-
-  async requestOtp(email: string) {
-    const result = await this.request('/auth/request-otp', {
-      method: 'POST',
-      body: JSON.stringify({ email }) // ✅ Fixed: Explicit stringify
-    });
-    
-    this.triggerWebhook('otp.requested', { email });
-    return result;
-  }
-
-  async verifyOtp(email: string, otp: string): Promise<AuthResponse> {
-    const result = await this.request<AuthResponse>('/auth/verify-otp', {
-      method: 'POST',
-      body: JSON.stringify({ email, otp }) // ✅ Fixed: Explicit stringify
-    });
-    
     if (result.success) {
-      this.triggerWebhook('otp.verified', { email });
-      this.triggerWebhook('user.logged_in', { email, user: result.user });
+      this.triggerWebhook('user.registered', result.user);
     }
     
     return result;
+  }
+
+  /**
+   * Resend OTP code
+   */
+  async resendOTP(email: string, purpose: string = 'account_verification'): Promise<OTPResponse> {
+    const result = await this.request<OTPResponse>('/resend-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email, purpose }) // ✅ Fixed: Explicit stringify
+    });
+    
+    this.triggerWebhook('otp.requested', { email, purpose });
+    return result;
+  }
+
+  // =============================================
+  // LEGACY AUTH ENDPOINTS (for backward compatibility)
+  // =============================================
+
+  async requestOtp(email: string): Promise<OTPResponse> {
+    return this.sendOTP(email);
+  }
+
+  async verifyOtp(email: string, otp: string): Promise<OTPResponse> {
+    return this.verifyOTP(email, otp);
   }
 
   // =============================================
@@ -384,6 +428,49 @@ class ApiService {
     
     this.triggerWebhook('contact.requested', result);
     return result;
+  }
+
+  // =============================================
+  // UTILITY METHODS
+  // =============================================
+
+  /**
+   * Complete OTP registration flow (send OTP -> verify OTP -> register)
+   */
+  async completeOTPRegistration(
+    email: string, 
+    userData: any, 
+    otp: string
+  ): Promise<{ success: boolean; message: string; user?: any }> {
+    try {
+      // Step 1: Verify OTP
+      const verifyResult = await this.verifyOTP(email, otp, 'account_verification');
+      if (!verifyResult.success) {
+        return { success: false, message: verifyResult.message };
+      }
+
+      // Step 2: Complete registration
+      const registerResult = await this.register(userData);
+      return registerResult;
+
+    } catch (error: any) {
+      return { success: false, message: error.message };
+    }
+  }
+
+  /**
+   * Validate email format
+   */
+  validateEmail(email: string): boolean {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  }
+
+  /**
+   * Validate OTP format (6 digits)
+   */
+  validateOTP(otp: string): boolean {
+    return /^\d{6}$/.test(otp);
   }
 }
 

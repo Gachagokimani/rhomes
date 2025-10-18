@@ -1,66 +1,288 @@
-
+// store.tsx
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { UserRole, User, Listing, PropertyType, RoomType, FurnishingLevel } from './types';
+import { UserRole, User, Listing } from './types';
 
-// Auth Context
+// Initial mock listings data
+const initialListings: Listing[] = [
+  {
+    id: '1',
+    title: 'Cozy Apartment in the City',
+    description: 'A cozy apartment located in the heart of the city.',
+    price: 1200,
+    location: 'New York, NY',
+    images: ['https://picsum.photos/seed/1/800/600'],
+    amenities: ['WiFi', 'Air Conditioning', 'Heating'],
+    landlordId: 'landlord123',
+    createdAt: new Date(),
+    views: 0,
+    details: {
+      bedrooms: 1,
+      bathrooms: 1,
+      area: 500,
+      availableFrom: new Date('2024-01-01'),
+      minimumLease: 12,
+      deposit: 1200,
+    },
+    utilities: {
+      water: true,
+      electricity: true,
+      gas: true,
+      internet: true,
+    },
+    rules: {
+      pets: true,
+      smoking: false,
+      parties: false,
+      guests: true,
+    },
+    contact: {
+      name: 'John Doe',
+      email: 'john.doe@example.com',
+      phone: '+1234567890',
+    },
+    status: 'available',
+    rating: 4.5,
+    reviews: 10,
+  },
+  {
+    id: '2',
+    title: 'Modern Studio near Downtown',
+    description: 'A modern studio apartment with great views.',
+    price: 1500,
+    location: 'San Francisco, CA',
+    images: ['https://picsum.photos/seed/2/800/600'],
+    amenities: ['WiFi', 'Air Conditioning', 'Heating', 'Gym'],
+    landlordId: 'landlord456',
+    createdAt: new Date(),
+    views: 0,
+    details: {
+      bedrooms: 0,
+      bathrooms: 1,
+      area: 400,
+      availableFrom: new Date('2024-02-01'),
+      minimumLease: 6,
+      deposit: 1500,
+    },
+    utilities: {
+      water: true,
+      electricity: true,
+      gas: true,
+      internet: true,
+    },
+    rules: {
+      pets: false,
+      smoking: false,
+      parties: false,
+      guests: true,
+    },
+    contact: {
+      name: 'Jane Smith',
+      email: 'jane.smith@example.com',
+      phone: '+0987654321',
+    },
+    status: 'available',
+    rating: 4.8,
+    reviews: 5,
+  },
+];
+
+// Auth Context - UPDATED: Frontend-only authentication
 interface AuthContextType {
   currentUser: User | null;
   currentRole: UserRole;
-  login: (role: UserRole) => void;
+  login: (email: string, password: string) => Promise<boolean>;
+  register: (userData: RegisterData) => Promise<boolean>;
   logout: () => void;
   switchRole: (role: UserRole) => void;
   isLandlord: boolean;
   isTenant: boolean;
+  isAuthenticated: boolean;
+  loading: boolean;
 }
+
+interface RegisterData {
+  name: string;
+  email: string;
+  password: string;
+  role: UserRole;
+  phone: string;
+  bio?: string;
+}
+
+// Mock user database in localStorage
+const MOCK_USERS_KEY = 'rhomes_mock_users';
+
+const getMockUsers = (): User[] => {
+  try {
+    return JSON.parse(localStorage.getItem(MOCK_USERS_KEY) || '[]');
+  } catch {
+    return [];
+  }
+};
+
+const saveMockUsers = (users: User[]) => {
+  localStorage.setItem(MOCK_USERS_KEY, JSON.stringify(users));
+};
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentRole, setCurrentRole] = useState<UserRole>(UserRole.TENANT);
+  const [loading, setLoading] = useState<boolean>(false);
 
-  const login = useCallback((role: UserRole) => {
-    const user: User = {
-      id: 'user123',
-      name: role === UserRole.LANDLORD ? 'Landlord Name' : 'Tenant Name',
-      role: role,
-      memberSince: new Date(),
-      isVerified: true,
-      bio: role === UserRole.TENANT ? 'Looking for a great room!' : 'Experienced and friendly landlord.',
-      profilePictureUrl: role === UserRole.LANDLORD ? `https://picsum.photos/seed/landlord${Date.now()}/100/100` : `https://picsum.photos/seed/tenant${Date.now()}/100/100`,
+  // Check for existing session on app start
+  useEffect(() => {
+    const checkExistingAuth = async () => {
+      const userData = localStorage.getItem('user_data');
+      
+      if (userData) {
+        try {
+          setLoading(true);
+          const user = JSON.parse(userData);
+          setCurrentUser(user);
+          setCurrentRole(user.role);
+          console.log('✅ Restored user session:', user.email);
+        } catch (error) {
+          console.error('Failed to restore session:', error);
+          localStorage.removeItem('user_data');
+        } finally {
+          setLoading(false);
+        }
+      }
     };
-    setCurrentUser(user);
-    setCurrentRole(role);
+
+    checkExistingAuth();
+  }, []);
+
+  const register = useCallback(async (userData: RegisterData): Promise<boolean> => {
+    try {
+      setLoading(true);
+      
+      // Check if user already exists
+      const existingUsers = getMockUsers();
+      const userExists = existingUsers.some(user => user.email === userData.email);
+      
+      if (userExists) {
+        alert('User with this email already exists. Please login instead.');
+        return false;
+      }
+
+      // Create new user
+      const newUser: User = {
+        id: `user-${Date.now()}`,
+        email: userData.email,
+        name: userData.name,
+        role: userData.role,
+        memberSince: new Date(),
+        isVerified: true, // Auto-verify in demo mode
+        isActive: true,
+        bio: userData.bio || '',
+        phone: userData.phone,
+        profilePictureUrl: `https://picsum.photos/seed/${userData.email}/100/100`,
+      };
+
+      // Save to mock database
+      existingUsers.push(newUser);
+      saveMockUsers(existingUsers);
+
+      // Auto-login after registration
+      setCurrentUser(newUser);
+      setCurrentRole(userData.role);
+      localStorage.setItem('user_data', JSON.stringify(newUser));
+      
+      console.log('✅ User registered and logged in:', newUser.email);
+      return true;
+    } catch (error: any) {
+      console.error('Registration failed:', error);
+      alert('Registration failed. Please try again.');
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const login = useCallback(async (email: string, _password: string): Promise<boolean> => {
+    try {
+      setLoading(true);
+      
+      // In demo mode, we'll create a user if they don't exist
+      const existingUsers = getMockUsers();
+      let user = existingUsers.find(u => u.email === email);
+
+      if (!user) {
+        // Auto-create user for demo purposes
+        const newUser: User = {
+          id: `user-${Date.now()}`,
+          email: email,
+          name: email.split('@')[0],
+          role: UserRole.TENANT, // Default to tenant
+          memberSince: new Date(),
+          isVerified: true,
+          isActive: true,
+          bio: 'Demo user account',
+          phone: '+1234567890',
+          profilePictureUrl: `https://picsum.photos/seed/${email}/100/100`,
+        };
+
+        existingUsers.push(newUser);
+        saveMockUsers(existingUsers);
+        user = newUser;
+        
+        console.log('🔧 Auto-created demo user:', email);
+      }
+
+      // In real app, you'd verify password here
+      // For demo, we accept any password
+      
+      setCurrentUser(user);
+      setCurrentRole(user.role);
+      localStorage.setItem('user_data', JSON.stringify(user));
+      
+      console.log('✅ User logged in:', user.email);
+      return true;
+    } catch (error: any) {
+      console.error('Login failed:', error);
+      alert('Login failed. Please try again.');
+      return false;
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   const logout = useCallback(() => {
     setCurrentUser(null);
-    // Default to tenant role on logout, or could be undefined
-    setCurrentRole(UserRole.TENANT); 
+    setCurrentRole(UserRole.TENANT);
+    localStorage.removeItem('user_data');
+    console.log('👋 User logged out');
   }, []);
 
   const switchRole = useCallback((role: UserRole) => {
     setCurrentRole(role);
     if (currentUser) {
-      setCurrentUser(prev => prev ? ({ ...prev, role }) : null);
-    } else {
-      // If no user, login with the new role (basic user)
-      login(role);
+      const updatedUser = { ...currentUser, role };
+      setCurrentUser(updatedUser);
+      localStorage.setItem('user_data', JSON.stringify(updatedUser));
     }
-  }, [currentUser, login]);
-  
-  // Auto-login for demo purposes
-  useEffect(() => {
-    login(UserRole.TENANT);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
+  }, [currentUser]);
 
   const isLandlord = currentRole === UserRole.LANDLORD && !!currentUser;
   const isTenant = currentRole === UserRole.TENANT && !!currentUser;
+  const isAuthenticated = !!currentUser;
 
   return (
-    <AuthContext.Provider value={{ currentUser, currentRole, login, logout, switchRole, isLandlord, isTenant }}>
+    <AuthContext.Provider value={{ 
+      currentUser, 
+      currentRole, 
+      login, 
+      register,
+      logout, 
+      switchRole, 
+      isLandlord, 
+      isTenant, 
+      isAuthenticated,
+      loading
+    }}>
       {children}
     </AuthContext.Provider>
   );
@@ -74,86 +296,122 @@ export const useAuth = (): AuthContextType => {
   return context;
 };
 
-
-// Listings Context (Mock Data)
+// Listings Context with API Integration
 interface ListingsContextType {
   listings: Listing[];
   getListingById: (id: string) => Listing | undefined;
-  addListing: (listingData: Omit<Listing, 'id' | 'landlordId' | 'createdAt' | 'views'>) => Listing;
+  addListing: (listingData: Omit<Listing, 'id' | 'landlordId' | 'createdAt' | 'views'>) => Promise<Listing>;
+  updateListing: (id: string, updates: Partial<Listing>) => Promise<void>;
+  deleteListing: (id: string) => Promise<void>;
   isLoading: boolean;
+  error: string | null;
+  fetchListings: () => Promise<void>;
 }
 
 const ListingsContext = createContext<ListingsContextType | undefined>(undefined);
 
-const initialListings: Listing[] = [
-  {
-    id: '1', landlordId: 'landlord1', title: 'Spacious Room in Sunny Apartment',
-    description: 'A bright and airy double room available in a modern 2-bed apartment. Sharing with one friendly professional. Excellent transport links and local amenities.',
-    propertyType: PropertyType.APARTMENT,
-    address: { city: 'San Francisco', neighborhood: 'Mission District' },
-    roomType: RoomType.DOUBLE, furnishingLevel: FurnishingLevel.FURNISHED,
-    squareFootage: 150, photos: [`https://picsum.photos/seed/room1/600/400`, `https://picsum.photos/seed/room1_2/600/400`],
-    monthlyRent: 1200, securityDeposit: 1000,
-    billsIncluded: { wifi: true, electricity: false, water: true, gas: false, councilTax: true },
-    leaseLengthMinMonths: 6, dateAvailable: new Date('2024-08-01'),
-    houseRules: { smokingAllowed: false, petsConsidered: false, overnightGuestsPolicy: 'Allowed with notice' },
-    aboutHousemates: 'Quiet and respectful professional in late 20s.',
-    createdAt: new Date('2024-06-01'), views: 120
-  },
-  {
-    id: '2', landlordId: 'landlord2', title: 'Cozy Single Room near University',
-    description: 'Perfect for students! A comfortable single room in a shared house just a 10-minute walk from the main campus. All bills included.',
-    propertyType: PropertyType.HOUSE,
-    address: { city: 'Boston', neighborhood: 'Cambridge' },
-    roomType: RoomType.SINGLE, furnishingLevel: FurnishingLevel.FURNISHED,
-    photos: [`https://picsum.photos/seed/room2/600/400`], videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', // Example video
-    monthlyRent: 800, securityDeposit: 800,
-    billsIncluded: { wifi: true, electricity: true, water: true, gas: true, councilTax: true },
-    leaseLengthMinMonths: 9, dateAvailable: new Date('2024-09-01'),
-    houseRules: { smokingAllowed: false, petsConsidered: true, overnightGuestsPolicy: 'Discuss with housemates' },
-    createdAt: new Date('2024-06-10'), views: 250
-  },
-   {
-    id: '3', landlordId: 'landlord1', title: 'Modern En-suite Room with City Views',
-    description: 'Stunning en-suite room in a new apartment building. Features floor-to-ceiling windows, access to gym and communal spaces.',
-    propertyType: PropertyType.APARTMENT,
-    address: { city: 'New York', neighborhood: 'Midtown' },
-    roomType: RoomType.EN_SUITE, furnishingLevel: FurnishingLevel.PARTIALLY_FURNISHED,
-    squareFootage: 200, photos: [`https://picsum.photos/seed/room3/600/400`, `https://picsum.photos/seed/room3_2/600/400`, `https://picsum.photos/seed/room3_3/600/400`],
-    monthlyRent: 1800, securityDeposit: 1800,
-    billsIncluded: { wifi: true, electricity: false, water: false, gas: false },
-    leaseLengthMinMonths: 12, dateAvailable: new Date('2024-07-15'),
-    houseRules: { smokingAllowed: false, petsConsidered: false, overnightGuestsPolicy: 'Not allowed' },
-    aboutHousemates: 'Young professionals, respectful of space.',
-    createdAt: new Date('2024-05-20'), views: 88
-  },
-];
-
 export const ListingsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [listings, setListings] = useState<Listing[]>(initialListings);
+  const [listings, setListings] = useState<Listing[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
   const { currentUser } = useAuth();
+
+  // Fetch listings from API with fallback to initialListings
+  const fetchListings = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      // For now, use initial listings
+      setListings(initialListings);
+    } catch (err: any) {
+      setError(err.message);
+      console.error('Failed to fetch listings:', err);
+      // On error, use initialListings as fallback
+      setListings(initialListings);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Initial fetch
+  useEffect(() => {
+    fetchListings();
+  }, [fetchListings]);
 
   const getListingById = useCallback((id: string): Listing | undefined => {
     return listings.find(listing => listing.id === id);
   }, [listings]);
 
-  const addListing = useCallback((listingData: Omit<Listing, 'id' | 'landlordId' | 'createdAt' | 'views'>): Listing => {
-    setIsLoading(true);
-    const newListing: Listing = {
-      ...listingData,
-      id: String(Date.now()), // Simple ID generation
-      landlordId: currentUser?.id || 'unknown_landlord',
-      createdAt: new Date(),
-      views: 0,
-    };
-    setListings(prevListings => [newListing, ...prevListings]);
-    setIsLoading(false);
-    return newListing;
+  const addListing = useCallback(async (listingData: Omit<Listing, 'id' | 'landlordId' | 'createdAt' | 'views'>): Promise<Listing> => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      if (!currentUser) {
+        throw new Error('You must be logged in to create a listing');
+      }
+
+      // Create mock listing
+      const newListing: Listing = {
+        ...listingData,
+        id: `listing-${Date.now()}`,
+        landlordId: currentUser.id,
+        createdAt: new Date(),
+        views: 0
+      };
+      
+      setListings(prev => [newListing, ...prev]);
+      return newListing;
+    } catch (err: any) {
+      setError(err.message);
+      console.error('Failed to create listing:', err);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
   }, [currentUser]);
 
+  const updateListing = useCallback(async (id: string, updates: Partial<Listing>): Promise<void> => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      setListings(prev => prev.map(listing => 
+        listing.id === id ? { ...listing, ...updates } : listing
+      ));
+    } catch (err: any) {
+      setError(err.message);
+      console.error('Failed to update listing:', err);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const deleteListing = useCallback(async (id: string): Promise<void> => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      setListings(prev => prev.filter(listing => listing.id !== id));
+    } catch (err: any) {
+      setError(err.message);
+      console.error('Failed to delete listing:', err);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   return (
-    <ListingsContext.Provider value={{ listings, getListingById, addListing, isLoading }}>
+    <ListingsContext.Provider value={{ 
+      listings, 
+      getListingById, 
+      addListing, 
+      updateListing,
+      deleteListing,
+      isLoading, 
+      error,
+      fetchListings
+    }}>
       {children}
     </ListingsContext.Provider>
   );

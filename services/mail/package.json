@@ -1,0 +1,21 @@
+{
+  "name": "mail",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "packagemanager": "pnpm",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "install": "pnpm install"
+  },
+  "dependencies": {
+    "nodemailer": "^6.9.4",
+    "axios": "^1.4.0",
+    "dotenv": "^16.3.1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.18.3"
+}

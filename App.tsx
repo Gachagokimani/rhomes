@@ -1,36 +1,35 @@
-
 import React from 'react';
-// If your new server configuration uses BrowserRouter instead of HashRouter, update the import:
 import { HashRouter, Navigate, Routes, Route } from 'react-router-dom';
 import { AuthProvider, ListingsProvider, useAuth } from './store';
 import { Navbar, Footer } from './ui';
-import { HomePage, ListingsPage, ListingDetailPage, CreateListingPage, ProfilePage } from './features';
+import { HomePage, ListingsPage, ListingDetailPage, CreateListingPage, ProfilePage, } from './features';
 import { UserRole } from './types';
+import { VerifyEmailPage } from './components/VerifyEmailPage';
+import { RegisterPage } from './components/RegisterPage';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  allowedRoles: UserRole[];
+  allowedRoles?: UserRole[];
+  requireAuth?: boolean;
 }
 
-const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles }) => {
+const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ 
+  children, 
+  allowedRoles = [], 
+  requireAuth = true 
+}) => {
   const { currentUser, currentRole } = useAuth();
 
-  if (!currentUser) {
-    // Redirect to login or home if not logged in
-    // For this demo, redirecting to home and showing a message there.
-    // Or, could have a dedicated login page.
-    return <Navigate to="/" replace />; 
+  if (requireAuth && !currentUser) {
+    return <Navigate to="/" replace />;
   }
 
-  if (!allowedRoles.includes(currentRole)) {
-    // Redirect if role not allowed
-    // Could redirect to an "Access Denied" page or show a message
-    return <Navigate to="/" replace />; 
+  if (requireAuth && allowedRoles.length > 0 && !allowedRoles.includes(currentRole)) {
+    return <Navigate to="/" replace />;
   }
 
   return <>{children}</>;
 };
-
 
 const AppContent: React.FC = () => {
   return (
@@ -38,11 +37,16 @@ const AppContent: React.FC = () => {
       <Navbar />
       <main className="flex-grow">
         <Routes>
+          {/* Public routes */}
           <Route path="/" element={<HomePage />} />
           <Route path="/listings" element={<ListingsPage />} />
           <Route path="/listings/:id" element={<ListingDetailPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/verify-email" element={<VerifyEmailPage />} />
+          
+          {/* Protected routes */}
           <Route 
-            path="/create-listing" 
+            path="/listings/new" 
             element={
               <ProtectedRoute allowedRoles={[UserRole.LANDLORD]}>
                 <CreateListingPage />
@@ -57,7 +61,8 @@ const AppContent: React.FC = () => {
               </ProtectedRoute>
             }
           />
-          {/* Catch-all for unknown routes */}
+          
+          {/* Catch-all route */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
